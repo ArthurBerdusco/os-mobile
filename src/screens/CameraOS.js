@@ -7,11 +7,11 @@ import Button from '../components/Button';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const CameraOS = ({ navigation }) => {
+const CameraOS = ({ navigation, route }) => {
 
+  const {idService} = route.params
   const [hasCameraPermission, setHasCameraPermission] = useState(null);
   const [image, setImage] = useState(null);
-
   const [type, setType] = useState(Camera.Constants.Type.back); //Back ou Front
   const [flash, setFlash] = useState(Camera.Constants.FlashMode.off); //Flash
 
@@ -26,24 +26,36 @@ const CameraOS = ({ navigation }) => {
   }, []);
 
   const takePicture = async () => {
-      if (cameraRef) {
-          try {
-              const data = await cameraRef.current.takePictureAsync();
+    if (cameraRef) {
+        try {
+            const data = await cameraRef.current.takePictureAsync();
+            setImage(data.uri);
+            addImageToCache(data.uri);
+        } catch (error) {
+            console.log(error);
+        }
+    }
+};
 
-              setImage(data.uri);
-              // Salvar a URI da imagem no AsyncStorage
-              await AsyncStorage.setItem('takenImage', data.uri);
-          } catch (error) {
-              console.log(error);
-          }
-      }
-  };
+const addImageToCache = async (imageUri) => {
+    try {
+        // Obter imagens existentes do AsyncStorage
+        const existingImages = await AsyncStorage.getItem(idService);
+        const parsedImages = existingImages ? JSON.parse(existingImages) : [];
+
+        // Adicionar a nova imagem à lista
+        const updatedImages = [...parsedImages, imageUri];
+
+        // Salvar a lista atualizada no AsyncStorage
+        await AsyncStorage.setItem(idService, JSON.stringify(updatedImages));
+    } catch (error) {
+        console.error('Erro ao adicionar imagem ao cache:', error.message);
+    }
+};
 
   const savePicture = async () => {
       if (image) {
           try {
-
-              const asset = await MediaLibrary.createAssetAsync(image);
               alert('Picture saved! 🎉');
               setImage(null);
               navigation.goBack({reload: true});

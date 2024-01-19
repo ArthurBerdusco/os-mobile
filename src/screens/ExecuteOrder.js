@@ -1,57 +1,76 @@
-import React, { useEffect, useState } from "react";
-import { View, Text, TouchableOpacity, TextInput, StyleSheet, Alert, Image, FlatList } from "react-native";
+import React, { useState } from "react";
+import { View, Text, TouchableOpacity, TextInput, StyleSheet, Alert, Image, FlatList, Button } from "react-native";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { FontAwesome } from '@expo/vector-icons'; // Importe o pacote FontAwesome
+
+import { useFocusEffect } from '@react-navigation/native';
+
 const ExecuteOrder = ({ navigation, route }) => {
+
+    const API_BASE_URL = 'http://192.168.15.21:8080';
 
     const [images, setImages] = useState([]);
     const [jobDescription, setJobDescription] = useState("");
     const service = route.params.service;
 
-    function addImage(imageUri) {
-        const newImages = [...images, imageUri];
-        setImages(newImages);
-    }
+    const idService = service.id.toString()
 
-    useEffect(() => {
-        const fetchTakenImage = async () => {
-            try {
-                const imageUri = await AsyncStorage.getItem('takenImage');
-                if (imageUri) {
-                    addImage(imageUri)
+    useFocusEffect(
+        React.useCallback(() => {
+            const fetchTakenImage = async () => {
+                try {
+                    const cachedImages = await AsyncStorage.getItem(idService);
+                    if (cachedImages) {
+                        const parsedImages = JSON.parse(cachedImages);
+                        setImages(parsedImages);
+                    }
+                } catch (error) {
+                    console.error('Erro ao obter imagens do cache:', error.message);
                 }
-            } catch (error) {
-                console.error('Error fetching image:', error);
-            }
-        };
+            };
 
-        fetchTakenImage();
-
-    }, []);
+            fetchTakenImage();
+        }, [idService])
+    );
 
     const handleFinishOrder = async () => {
         try {
+
             if (jobDescription.trim() === "") {
                 Alert.alert("Erro", "A descrição do trabalho deve ser preenchida.");
                 return;
             }
 
-            const response = await fetch(`http://192.168.15.21:8080/correctives/complete/${service.id}`, {
+            const formData = new FormData();
+
+            formData.append('idServico', idService);
+
+            formData.append('jobDescription', jobDescription)
+
+            images.forEach((image, index) => {
+                const uri = image;
+                const type = 'image/jpg';
+                formData.append('images', {
+                    uri: Platform.OS === 'android' ? 'file://' + uri : uri,
+                    name: "image.jpg",
+                    type,
+                });
+            });
+
+            const response = await fetch(`${API_BASE_URL}/correctives/complete/${service.id}`, {
                 method: 'PUT',
                 headers: {
-                    'Content-Type': 'application/json',
+                    'Content-Type': 'multipart/form-data',
                 },
-                body: JSON.stringify({
-                    jobDescription: jobDescription,
-                }),
+                body: formData
             });
 
             if (!response.ok) {
                 throw new Error('Erro ao finalizar a ordem de serviço');
             }
 
-            // Remover a URI da imagem do AsyncStorage após concluir a ordem
-            await AsyncStorage.removeItem('takenImage');
+            await AsyncStorage.removeItem(idService);
 
             navigation.navigate("Home");
         } catch (error) {
@@ -60,8 +79,8 @@ const ExecuteOrder = ({ navigation, route }) => {
         }
     };
 
-
     return (
+
         <View style={styles.container}>
             <Text style={styles.label}>Localização:</Text>
             <Text style={styles.value}>{service.location}</Text>
@@ -82,6 +101,8 @@ const ExecuteOrder = ({ navigation, route }) => {
             />
 
             <FlatList
+                style={{ marginBottom: 10 }}
+                contentContainerStyle={styles.imageListContainer}
                 data={images}
                 keyExtractor={(item, index) => index.toString()}
                 renderItem={({ item }) => (
@@ -89,23 +110,23 @@ const ExecuteOrder = ({ navigation, route }) => {
                         <Image source={{ uri: item }} style={styles.takenImage} />
                     </View>
                 )}
+                horizontal={true}
             />
 
             <TouchableOpacity
-                style={styles.startButton}
+                style={styles.roundButton}
                 onPress={() => {
-                    navigation.navigate("CameraOS")
+                    navigation.navigate("CameraOS", { idService: idService });
                 }}
             >
-                <Text style={styles.startButtonText}>Tirar Foto</Text>
+                <FontAwesome name="camera" size={24} color="white" />
             </TouchableOpacity>
 
-
             <TouchableOpacity
-                style={styles.startButton}
+                style={styles.finishButton}
                 onPress={handleFinishOrder}
             >
-                <Text style={styles.startButtonText}>Finalizar</Text>
+                <Text style={styles.finishButtonText}>Finalizar</Text>
             </TouchableOpacity>
         </View>
     );
@@ -115,7 +136,7 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         padding: 16,
-        backgroundColor: "#fff",
+        backgroundColor: "#F5F5F5",
     },
     label: {
         fontSize: 16,
@@ -126,18 +147,6 @@ const styles = StyleSheet.create({
         fontSize: 14,
         marginBottom: 16,
     },
-    startButton: {
-        backgroundColor: "red",
-        padding: 12,
-        borderRadius: 8,
-        alignItems: "center",
-        marginTop: 16,
-    },
-    startButtonText: {
-        color: "#fff",
-        fontSize: 16,
-        fontWeight: "bold",
-    },
     input: {
         borderWidth: 1,
         borderColor: '#ccc',
@@ -146,11 +155,38 @@ const styles = StyleSheet.create({
         marginBottom: 16,
         height: 60,
     },
+    imageContainer: {
+        marginHorizontal: 8,
+        marginBottom: 16,
+    },
     takenImage: {
-        width: 200,
-        height: 200,
-        resizeMode: 'cover',
+        width: 150,
+        height: 300, // Ajuste a altura conforme necessário
+        resizeMode: 'contain',
+    },
+    roundButton: {
+        width: 60,
+        height: 60,
+        borderRadius: 100,
+        backgroundColor: "gray",
+        alignItems: "center",
+        justifyContent: "center",
+        alignSelf: 'flex-end',
+        marginBottom: 16,
+    },
+    finishButton: {
+        backgroundColor: "red",
+        padding: 12,
+        borderRadius: 8,
+        alignItems: "center",
+        marginTop: 16,
+    },
+    finishButtonText: {
+        color: "#fff",
+        fontSize: 16,
+        fontWeight: "bold",
     },
 });
+
 
 export default ExecuteOrder;

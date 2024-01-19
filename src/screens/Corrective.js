@@ -9,9 +9,18 @@ const Corrective = ({ navigation, route }) => {
     const technician = route.params.technician;
     const id = technician.id;
 
+    const handleNavigate = (service) => {
+        
+        if (service.status == "IN_PROGRESS") {
+            navigation.navigate('ExecuteOrder', { service: service })
+            return;
+        }
+        navigation.navigate('InfoOrder', { service: service })
+    }
+
     const Service = ({ service }) => {
         return (
-            <TouchableOpacity style={styles.card} onPress={() => { navigation.navigate('InfoOrder', { service: service }) }}>
+            <TouchableOpacity style={styles.card} onPress={() => { handleNavigate(service) }}>
                 <Text style={styles.location}>{service.location}</Text>
                 <Text style={styles.description}>{service.description}</Text>
                 <Text style={styles.status}>{service.status}</Text>
@@ -34,8 +43,9 @@ const Corrective = ({ navigation, route }) => {
                     throw new Error('Erro ao buscar dados');
                 }
 
-                const data = await response.json();
-                setCorrective(data.correctives);
+                const { data } = await response.json();
+
+                setCorrective(data);
                 setLoading(false);
             } catch (error) {
                 console.error('Erro ao fazer a solicitação:', error.message);
